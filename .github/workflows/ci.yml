@@ -26,6 +26,8 @@ jobs:
           fi
           python -c 'from pathlib import Path; from privacyvpn.firewall import client_policy, entry_policy, exit_policy; Path("/tmp/gcvpn-ci-firewall.nft").write_text(client_policy("203.0.113.10", 443, "tcp") + entry_policy() + exit_policy("eth0"))'
           sudo nft -c -f /tmp/gcvpn-ci-firewall.nft
+      - name: Isolated kernel kill-switch test (temporary network namespace)
+        run: sudo python3 tests/lab/check_client_firewall.py
       - name: Key and config hygiene
         shell: bash
         run: |

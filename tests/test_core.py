@@ -94,6 +94,7 @@ class ValidationTests(unittest.TestCase):
         self.assertIn("10.77.1.0/24", exit_node["gpt0.conf"])
         self.assertIn("masquerade", exit_node["exit-firewall.nft"])
         self.assertIn("policy drop", client_policy("203.0.113.10", 51820))
+        self.assertIn("meta nfproto ipv6 drop", client_policy("203.0.113.10", 51820))
 
     def test_key_file_permissions_and_create_only_output(self):
         keyfile = self.root / "role.key"
@@ -134,6 +135,7 @@ class ValidationTests(unittest.TestCase):
         self.assertIn("127.0.0.1:51820", (out / "gpv0.conf").read_text())
         self.assertIn("tcp dport 443", (out / "client-killswitch.nft").read_text())
         self.assertIn("wss://vpn.example.org:443", (out / "wstunnel-client.sh").read_text())
+        self.assertTrue((out / "client-underlay-route.sh").is_file())
 
 
 if __name__ == "__main__":

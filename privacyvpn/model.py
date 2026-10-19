@@ -65,8 +65,11 @@ def load(path):
     c = exact(config["client"], ["public_key", "dns"], "client")
     e = exact(config["entry"], ["endpoint", "listen_port", "public_key", "transit_public_key"], "entry")
     x = exact(config["exit"], ["endpoint", "listen_port", "transit_public_key", "wan_interface"], "exit")
-    for value in (c["public_key"], e["public_key"], e["transit_public_key"], x["transit_public_key"]):
+    public_keys = (c["public_key"], e["public_key"], e["transit_public_key"], x["transit_public_key"])
+    for value in public_keys:
         key(value)
+    if len(set(public_keys)) != len(public_keys):
+        raise Invalid("Every WireGuard interface must have a distinct public key")
     for node in (e, x):
         node["endpoint"] = endpoint(node["endpoint"])
         node["listen_port"] = port(node["listen_port"])

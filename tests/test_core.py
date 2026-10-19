@@ -112,6 +112,17 @@ class ValidationTests(unittest.TestCase):
         with self.assertRaises(Invalid):
             write_files(out, {"gpv0.conf": "overwrite"})
 
+    def test_output_writer_refuses_unsafe_filenames_without_side_effects(self):
+        for index, unsafe in enumerate(("../outside.conf", "nested/gpv0.conf",
+                                        "/tmp/gpv0.conf", "", ".", "..",
+                                        "name\\with-backslash", "bad\x00name")):
+            with self.subTest(filename=repr(unsafe)):
+                output = self.root / f"unsafe-{index}"
+                with self.assertRaises(Invalid):
+                    write_files(output, {unsafe: "synthetic"})
+                self.assertFalse(output.exists())
+        self.assertFalse((self.root / "outside.conf").exists())
+
     def test_cli_rejects_entry_key_reuse(self):
         self.read(topology())
         entry_key = self.root / "entry.key"

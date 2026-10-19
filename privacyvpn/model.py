@@ -12,7 +12,7 @@ ENTRY = "10.77.1.1"
 ENTRY_T = "10.77.2.1"
 EXIT_T = "10.77.2.2"
 NAME = re.compile(r"^[a-zA-Z][a-zA-Z0-9_.-]{0,14}$")
-HOST = re.compile(r"^[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+$")
+HOST_LABEL = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
 
 
 class Invalid(ValueError):
@@ -26,9 +26,20 @@ def key(value):
         raw = base64.b64decode(value, validate=True)
     except (ValueError, binascii.Error) as err:
         raise Invalid("Invalid WireGuard public key") from err
-    if len(raw) != 32:
-        raise Invalid("WireGuard key must contain 32 bytes")
+    if len(raw) != 32 or raw == bytes(32):
+        raise Invalid("WireGuard key must be a nonzero 32-byte value")
+    if base64.b64encode(raw).decode("ascii") != value:
+        raise Invalid("WireGuard key must use canonical base64 encoding")
     return value
+
+
+def _unique_fields(pairs):
+    output = {}
+    for name, value in pairs:
+        if name in output:
+            raise Invalid("Duplicate JSON fields are not allowed")
+        output[name] = value
+    return output
 
 
 def exact(value, names, label):
@@ -38,6 +49,8 @@ def exact(value, names, label):
 
 
 def endpoint(value):
+    if not isinstance(value, str):
+        raise Invalid("Endpoints must be dotted-decimal IPv4 strings")
     try:
         address = ipaddress.IPv4Address(value)
     except (ValueError, ipaddress.AddressValueError) as err:
@@ -58,7 +71,7 @@ def load(path):
     if path.is_symlink() or not path.is_file() or path.stat().st_size > 32768:
         raise Invalid("Topology must be a small regular file")
     try:
-        config = json.loads(path.read_text(encoding="utf-8"))
+        config = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_unique_fields)
     except (ValueError, OSError, UnicodeError) as err:
         raise Invalid("Cannot parse topology JSON") from err
     exact(config, ["client", "entry", "exit", "transport"], "topology")
@@ -79,6 +92,8 @@ def load(path):
         raise Invalid("Invalid egress network interface")
     if x["wan_interface"] in ("gpv0", "gpe0", "gpt0"):
         raise Invalid("WAN interface conflicts with VPN interface")
+    if not isinstance(c["dns"], str):
+        raise Invalid("DNS must be a dotted-decimal IPv4 string")
     try:
         resolver = ipaddress.IPv4Address(c["dns"])
     except (ValueError, ipaddress.AddressValueError) as err:
@@ -93,8 +108,11 @@ def load(path):
     elif t.get("mode") == "wstunnel":
         exact(t, ["mode", "tls_port", "hostname"], "transport")
         port(t["tls_port"])
-        if not isinstance(t["hostname"], str) or not HOST.fullmatch(t["hostname"]):
-            raise Invalid("wstunnel requires a TLS DNS hostname")
+        hostname = t["hostname"]
+        if (not isinstance(hostname, str) or len(hostname) > 253 or
+                len(hostname.split(".")) < 2 or
+                any(not HOST_LABEL.fullmatch(label) for label in hostname.split("."))):
+            raise Invalid("wstunnel requires a valid TLS DNS hostname")
     else:
         raise Invalid("Transport must be wireguard or wstunnel")
     return config

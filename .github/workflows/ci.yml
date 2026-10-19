@@ -28,6 +28,15 @@ jobs:
           sudo nft -c -f /tmp/gcvpn-ci-firewall.nft
       - name: Isolated kernel kill-switch test (temporary network namespace)
         run: sudo python3 tests/lab/check_client_firewall.py
+      - name: Three-node WireGuard relay and transit outage (temporary namespaces)
+        shell: bash
+        run: |
+          set -eu
+          if ! command -v wg >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y wireguard-tools
+          fi
+          sudo python3 tests/lab/check_twohop_wireguard.py
       - name: Key and config hygiene
         shell: bash
         run: |

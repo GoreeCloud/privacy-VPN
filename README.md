@@ -124,9 +124,13 @@ With out-of-band access: remove the VPN interface with `wg-quick down` (client g
 2. Proper auto-start/supervision with rollback, per-host packet filter lifecycle and network-manager compatibility.
 3. Key rotation, multiple clients, profile revocation, secure onboarding and device integration.
 4. Production-grade obfuscation transport packaging, certificate lifecycle and performance characterization.
-5. A cross-platform UI and GoreeCloud Glaze integration only after the core network stack and privacy gates are validated.
+5. A cross-platform UI, icons and application surfaces built exclusively on [GoreeCloud/gc-ui](https://github.com/GoreeCloud/gc-ui), only after the core network stack and privacy gates are validated.
 
 See [SECURITY.md](SECURITY.md) for disclosure and threat-model limitations.
+
+## Interface design standard
+
+Any future application, website, icon or operating-system integration for this product must follow the canonical [GoreeCloud/gc-ui](https://github.com/GoreeCloud/gc-ui) repository. The command-line and network core remain independent of any optional visual interface.
 
 ## License
 

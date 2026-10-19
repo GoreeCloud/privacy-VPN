@@ -8,6 +8,7 @@ from .client import render_client
 from .entry import render_entry
 from .exit import render_exit
 from .firewall import client_policy
+from .underlay import render_client_underlay
 from .obfs import render_client as obfs_client, render_server as obfs_server
 
 
@@ -43,6 +44,8 @@ def main(argv=None):
                     f"Endpoint = 127.0.0.1:{entry['listen_port']}"
                 )
                 files["wstunnel-client.sh"] = obfs_client(cfg)
+            if obfuscated:
+                files["client-underlay-route.sh"] = render_client_underlay(entry["endpoint"])
             port = cfg["transport"]["tls_port"] if obfuscated else cfg["entry"]["listen_port"]
             proto = "tcp" if obfuscated else "udp"
             files["client-killswitch.nft"] = client_policy(cfg["entry"]["endpoint"], port, proto)

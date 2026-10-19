@@ -23,6 +23,12 @@ def read_secret(path):
 
 
 def write_files(destination, files):
+    # This helper may be reused with caller-provided file maps; never allow a
+    # generated filename to escape the owner-only output directory.
+    for name in files:
+        if (not isinstance(name, str) or name in ("", ".", "..") or
+                "/" in name or "\\" in name or "\x00" in name):
+            raise Invalid("Generated file names must be safe basenames")
     path = Path(destination)
     if path.is_symlink():
         raise Invalid("Output directory cannot be a symlink")

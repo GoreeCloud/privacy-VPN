@@ -1,0 +1,21 @@
+{
+  "client": {
+    "public_key": "PASTE_CLIENT_WIREGUARD_PUBLIC_KEY",
+    "dns": "9.9.9.9"
+  },
+  "entry": {
+    "endpoint": "203.0.113.10",
+    "listen_port": 51820,
+    "public_key": "PASTE_ENTRY_ACCESS_PUBLIC_KEY",
+    "transit_public_key": "PASTE_ENTRY_TRANSIT_PUBLIC_KEY"
+  },
+  "exit": {
+    "endpoint": "198.51.100.20",
+    "listen_port": 51821,
+    "transit_public_key": "PASTE_EXIT_TRANSIT_PUBLIC_KEY",
+    "wan_interface": "eth0"
+  },
+  "transport": {
+    "mode": "wireguard"
+  }
+}

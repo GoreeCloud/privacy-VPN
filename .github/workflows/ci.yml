@@ -1,0 +1,26 @@
+name: Python security smoke tests
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile
+        run: python -m compileall -q privacyvpn tests
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Key and config hygiene
+        shell: bash
+        run: |
+          set -eu
+          if git ls-files | grep -E '\.(key|pem|conf|nft|env)$|(^|/)topology\.json$'; then
+            echo "Refusing to pass: sensitive generated file is tracked" >&2
+            exit 1
+          fi

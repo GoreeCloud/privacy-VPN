@@ -1,0 +1,5 @@
+{
+  "mode": "wstunnel",
+  "tls_port": 443,
+  "hostname": "vpn.example.org"
+}

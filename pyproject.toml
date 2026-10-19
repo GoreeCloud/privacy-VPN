@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=65"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "goreecloud-privacy-vpn"
+version = "0.1.0"
+description = "Linux-first privacy VPN relay configuration toolkit based on WireGuard"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+license = "AGPL-3.0-or-later"
+
+[tool.setuptools.packages.find]
+include = ["privacyvpn*"]

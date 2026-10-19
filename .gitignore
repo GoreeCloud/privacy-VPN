@@ -1,0 +1,25 @@
+# Never publish generated node credentials or VPN provisioning outputs.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+*.key
+*.pem
+*.conf
+*.nft
+*.env
+.env*
+topology.json
+topology.*.json
+generated/
+out/
+secrets/
+.idea/
+.vscode/
+
+# Public example remains tracked
+!examples/topology.template.json

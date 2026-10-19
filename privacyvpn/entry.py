@@ -30,7 +30,9 @@ def render_entry(topology, private_key, transit_key):
     route_up = (
         "#!/bin/sh\nset -eu\n"
         "ip route replace default dev gpt0 table 51820\n"
-        f"ip rule add pref 10000 from {CLIENT_CIDR} lookup 51820\n"
+        f"if ! ip -4 rule show | grep -Fq 'from {CLIENT_CIDR} lookup 51820'; then\n"
+        f"  ip rule add pref 10000 from {CLIENT_CIDR} lookup 51820\n"
+        "fi\n"
     )
     route_down = (
         "#!/bin/sh\nset -eu\n"

@@ -16,13 +16,16 @@ from privacyvpn.__main__ import main
 
 
 K = base64.b64encode(b"\x11" * 32).decode()
+K2 = base64.b64encode(b"\x22" * 32).decode()
+K3 = base64.b64encode(b"\x33" * 32).decode()
+K4 = base64.b64encode(b"\x44" * 32).decode()
 
 
 def topology(mode="wireguard"):
     return {
         "client": {"public_key": K, "dns": "9.9.9.9"},
-        "entry": {"endpoint": "203.0.113.10", "listen_port": 51820, "public_key": K, "transit_public_key": K},
-        "exit": {"endpoint": "198.51.100.20", "listen_port": 51821, "transit_public_key": K, "wan_interface": "eth0"},
+        "entry": {"endpoint": "203.0.113.10", "listen_port": 51820, "public_key": K2, "transit_public_key": K3},
+        "exit": {"endpoint": "198.51.100.20", "listen_port": 51821, "transit_public_key": K4, "wan_interface": "eth0"},
         "transport": {"mode": "wireguard"} if mode == "wireguard" else
                      {"mode": "wstunnel", "tls_port": 443, "hostname": "vpn.example.org"},
     }
@@ -46,6 +49,12 @@ class ValidationTests(unittest.TestCase):
     def test_rejects_extra_properties(self):
         obj = topology()
         obj["entry"]["private_key"] = K
+        with self.assertRaises(Invalid):
+            self.read(obj)
+
+    def test_rejects_reused_wireguard_public_keys(self):
+        obj = topology()
+        obj["entry"]["public_key"] = obj["client"]["public_key"]
         with self.assertRaises(Invalid):
             self.read(obj)
 
@@ -101,6 +110,18 @@ class ValidationTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE((out / "gpv0.conf").stat().st_mode), 0o600)
         with self.assertRaises(Invalid):
             write_files(out, {"gpv0.conf": "overwrite"})
+
+    def test_cli_rejects_entry_key_reuse(self):
+        self.read(topology())
+        entry_key = self.root / "entry.key"
+        transit_key = self.root / "transit.key"
+        for target in (entry_key, transit_key):
+            target.write_text(K)
+            target.chmod(0o600)
+        output = self.root / "bad-entry"
+        self.assertEqual(main(["render", "entry", str(self.manifest), "--key", str(entry_key),
+                               "--transit-key", str(transit_key), "--output", str(output)]), 2)
+        self.assertFalse(output.exists())
 
     def test_cli_render_client_wstunnel(self):
         self.read(topology("wstunnel"))

@@ -48,6 +48,8 @@ def main(argv=None):
             files["client-killswitch.nft"] = client_policy(cfg["entry"]["endpoint"], port, proto)
         elif args.role == "entry":
             transit_secret = read_secret(args.transit_key)
+            if secret == transit_secret:
+                raise Invalid("Entry access and transit keys must be different")
             files = render_entry(cfg, secret, transit_secret)
             if cfg["transport"]["mode"] == "wstunnel":
                 files["wstunnel-server.sh"] = obfs_server(cfg)

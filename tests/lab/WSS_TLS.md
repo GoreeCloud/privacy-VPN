@@ -6,4 +6,6 @@ The test starts `wstunnel` on `127.0.0.1` with a one-day self-signed certificate
 
 The control's disabled verification must **never** be copied into generated, installed, or production GoreeCloud profiles.
 
-This test does **not** validate a legitimately trusted certificate, a DNS-name mismatch, rotation, certificate expiry, external network reachability, or actual WireGuard datagrams through WSS. Those remain separate acceptance requirements. The TLS test uses the upstream version pinned by the CI download and checksum; update both atomically when upgrading.
+A second test, `check_wss_trust.py`, creates a disposable private CA and CA-signed loopback WSS leaf certificate with DNS SAN `localhost`. It sets `SSL_CERT_FILE` **only on the test client process** and confirms verified WSS UDP forwarding succeeds for the matching hostname but fails for the same trusted chain accessed by the wrong hostname (`127.0.0.1`). The private CA, key, and trust override are temporary; no host trust store is modified.
+
+These tests do **not** establish public certificate-chain acceptance, issuance or rotation/renewal, expiry handling, external network reachability, production DNS bootstrap, or actual WireGuard datagrams through WSS. Those remain separate acceptance requirements. The TLS test uses the upstream version pinned by the CI download and checksum; update both atomically when upgrading.

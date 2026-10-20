@@ -15,7 +15,7 @@ def render_client(topology):
         "#!/bin/sh\nset -eu\n"
         f"# Before starting, pin {host} to {entry['endpoint']} in /etc/hosts.\n"
         "# Provide a publicly trusted matching TLS server certificate.\n"
-        "exec wstunnel client "
+        "exec wstunnel client --tls-verify-certificate "
         f"-L 'udp://127.0.0.1:{listen}:127.0.0.1:{listen}?timeout_sec=0' "
         f"'wss://{host}:{port}'\n"
     )

@@ -1,9 +1,11 @@
 """Adversarial validation tests; no networking or secrets used."""
 import base64
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 from privacyvpn.model import Invalid, key, load
 
 
@@ -79,6 +81,37 @@ class AdversarialTopologyTests(unittest.TestCase):
         config = sample()
         config["transport"] = {"mode": "wstunnel", "hostname": "vpn.example.org", "tls_port": 443}
         self.assertEqual(self.parsed(config)["transport"]["hostname"], "vpn.example.org")
+
+    def test_oversized_regular_file_is_rejected(self):
+        self.path.write_bytes(json.dumps(sample()).encode() + b" " * 32769)
+        with self.assertRaises(Invalid):
+            load(self.path)
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "Requires POSIX FIFO support")
+    def test_named_pipe_is_rejected_without_reading(self):
+        fifo = self.path.parent / "topology.fifo"
+        os.mkfifo(fifo)
+        with self.assertRaises(Invalid):
+            load(fifo)
+
+    def test_path_replacement_after_open_does_not_change_loaded_topology(self):
+        self.path.write_text(json.dumps(sample()), encoding="utf-8")
+        original_fdopen = os.fdopen
+        replacement = sample()
+        replacement["entry"]["endpoint"] = "203.0.113.55"
+
+        def swap_path_after_open(fd, mode):
+            new_file = self.path.parent / "replacement.json"
+            new_file.write_text(json.dumps(replacement), encoding="utf-8")
+            new_file.replace(self.path)
+            return original_fdopen(fd, mode)
+
+        with patch("privacyvpn.model.os.fdopen", side_effect=swap_path_after_open) as opened:
+            result = load(self.path)
+        opened.assert_called_once()
+        self.assertEqual(result["entry"]["endpoint"], "203.0.113.10")
+        self.assertEqual(json.loads(self.path.read_text())["entry"]["endpoint"],
+                         "203.0.113.55")
 
 
 if __name__ == "__main__":

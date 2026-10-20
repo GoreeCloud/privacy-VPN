@@ -85,6 +85,36 @@ def inside():
           "within the disposable network namespace")
     print("Namespace packet counters:", after)
 
+    # Verify DNS cannot bypass the tunnel over the physical/underlay interface.
+    # These are direct socket sends, not a system-resolver integration test.
+    dns_before = counters()["other_blocked"]
+
+    def deny_direct_dns(send):
+        before_probe = counters()["other_blocked"]
+        try:
+            send()
+        except OSError as err:
+            # A UDP DROP normally returns EPERM; TCP DROP may time out.
+            if err.errno != errno.EPERM and not isinstance(err, TimeoutError):
+                raise
+        else:
+            raise AssertionError("Direct DNS packet was not rejected")
+        if counters()["other_blocked"] <= before_probe:
+            raise AssertionError("DNS probe did not hit nftables default-deny")
+
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as dns_udp:
+        deny_direct_dns(lambda: dns_udp.sendto(b"synthetic-dns", ("9.9.9.9", 53)))
+        # Entry IPv4 is allowed only on the configured WireGuard port.
+        deny_direct_dns(lambda: dns_udp.sendto(b"synthetic-dns", ("203.0.113.10", 53)))
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as dns_tcp:
+        dns_tcp.settimeout(1)
+        deny_direct_dns(lambda: dns_tcp.connect(("9.9.9.9", 53)))
+
+    dns_after = counters()["other_blocked"]
+    if dns_after - dns_before < 3:
+        raise AssertionError("Expected direct DNS probes to hit default-deny")
+    print("PASS: underlay UDP/TCP DNS on port 53 denied, including to pinned entry")
+
 
 def main():
     if len(sys.argv) == 2 and sys.argv[1] == "--inside":

@@ -19,6 +19,7 @@ from privacyvpn.client import render_client
 from privacyvpn.entry import render_entry
 from privacyvpn.exit import render_exit
 from privacyvpn.firewall import client_policy
+from dns_wire import assert_query, reply
 
 
 def run(*args, input_text=None, env=None):
@@ -94,6 +95,14 @@ def udp_client(pid, destination, port, payload, *, require_reply=False):
     )
 
 
+def dns_client(pid, *, require_reply=True):
+    return subprocess.Popen(
+        ["nsenter", "-t", str(pid), "-n", sys.executable,
+         str(Path(__file__).with_name("dns_wire.py")),
+         "10.88.0.1", "53", "expect" if require_reply else "send"],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+
 def udp_recovery_client(pid, destination, port, payload):
     """Retry UDP for an upper-bounded handshake-recovery window."""
     program = (
@@ -136,16 +145,15 @@ def verify_traffic(nodes, scenario="transit", entry_route_script=None):
 
         # The topology declares 10.88.0.1 as DNS. Exercise its UDP/53 path
         # through both relays, without changing a system resolver or host DNS.
-        dns_client = udp_client(nodes["client"].pid, "10.88.0.1", 53,
-                                "synthetic-resolver-query", require_reply=True)
-        dns_data, dns_addr = dns_target.recvfrom(1024)
-        assert dns_data == b"synthetic-resolver-query", dns_data
+        resolver_client = dns_client(nodes["client"].pid)
+        dns_data, dns_addr = dns_target.recvfrom(2048)
+        assert_query(dns_data)
         assert dns_addr[0] == "203.0.113.2", f"DNS path bypassed exit NAT: {dns_addr}"
-        dns_target.sendto(b"synthetic-resolver-reply", dns_addr)
-        dns_out, dns_err = dns_client.communicate(timeout=8)
-        assert dns_client.returncode == 0, dns_err
-        assert dns_out.strip() == "synthetic-resolver-reply", dns_out
-        print("PASS isolated resolver UDP/53 path: client-entry-exit NAT and response")
+        dns_target.sendto(reply(dns_data), dns_addr)
+        dns_out, dns_err = resolver_client.communicate(timeout=8)
+        assert resolver_client.returncode == 0, dns_err
+        assert dns_out.strip() == "dns-answer-valid", dns_out
+        print("PASS RFC1035 DNS A query/response: client-entry-exit NAT")
 
         failure_interfaces = {
             "transit": ("entry", "gpt0"),
@@ -169,8 +177,7 @@ def verify_traffic(nodes, scenario="transit", entry_route_script=None):
             raise AssertionError(f"traffic reached target after {scenario} failure:"
                                  f" {leaked!r} from {source}")
 
-        dns_paused = udp_client(nodes["client"].pid, "10.88.0.1", 53,
-                                f"resolver-after-{scenario}")
+        dns_paused = dns_client(nodes["client"].pid, require_reply=False)
         dns_out, dns_err = dns_paused.communicate(timeout=8)
         assert dns_paused.returncode == 0, dns_err
         dns_target.settimeout(2)
@@ -198,8 +205,9 @@ def verify_traffic(nodes, scenario="transit", entry_route_script=None):
             (53, dns_target, b"recovered-resolver"),
         ):
             service.settimeout(1)
-            recovered = udp_recovery_client(nodes["client"].pid, "10.88.0.1",
-                                            port, message.decode())
+            recovered = (dns_client(nodes["client"].pid) if port == 53 else
+                         udp_recovery_client(nodes["client"].pid,
+                                             "10.88.0.1", port, message.decode()))
             deadline = time.monotonic() + 28
             received_any = False
             while time.monotonic() < deadline and recovered.poll() is None:
@@ -207,10 +215,14 @@ def verify_traffic(nodes, scenario="transit", entry_route_script=None):
                     received, observed_source = service.recvfrom(1024)
                 except socket.timeout:
                     continue
-                assert received == message, received
+                if port == 53:
+                    assert_query(received)
+                else:
+                    assert received == message, received
                 assert observed_source[0] == "203.0.113.2", observed_source
                 received_any = True
-                service.sendto(b"restored-ok", observed_source)
+                service.sendto(reply(received) if port == 53 else b"restored-ok",
+                               observed_source)
             recovered_out, recovered_err = recovered.communicate(timeout=3)
             if not received_any or recovered.returncode != 0:
                 for label, interfaces in (
@@ -224,7 +236,9 @@ def verify_traffic(nodes, scenario="transit", entry_route_script=None):
                                    "transfer"), flush=True)
                 raise AssertionError(f"No successful recovery: {scenario}, "
                                      f"port {port}, {recovered_err}")
-            assert recovered_out.strip() == "restored-ok", recovered_out
+            assert recovered_out.strip() == (
+                "dns-answer-valid" if port == 53 else "restored-ok"
+            ), recovered_out
         print(f"PASS {scenario}-restored: application and resolver paths recovered")
     finally:
         target.close()

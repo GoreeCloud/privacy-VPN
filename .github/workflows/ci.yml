@@ -52,6 +52,7 @@ jobs:
           tar -xzf "$labdir/wstunnel.tar.gz" -C "$labdir" wstunnel
           chmod 0700 "$labdir/wstunnel"
           GCVPN_WSTUNNEL="$labdir/wstunnel" python3 tests/lab/check_wss_tls.py
+          GCVPN_WSTUNNEL="$labdir/wstunnel" python3 tests/lab/check_wss_trust.py
       - name: Key and config hygiene
         shell: bash
         run: |

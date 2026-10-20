@@ -39,6 +39,19 @@ jobs:
           sudo python3 tests/lab/check_twohop_wireguard.py
           sudo env GCVPN_FAILURE=entry python3 tests/lab/check_twohop_wireguard.py
           sudo env GCVPN_FAILURE=exit python3 tests/lab/check_twohop_wireguard.py
+      - name: WSS TLS untrusted-server rejection (verified upstream binary)
+        shell: bash
+        run: |
+          set -eu
+          labdir="$(mktemp -d)"
+          trap 'rm -rf "$labdir"' EXIT
+          curl --fail --location --silent --show-error --retry 2 \
+            --output "$labdir/wstunnel.tar.gz" \
+            https://github.com/erebe/wstunnel/releases/download/v11.0.0/wstunnel_11.0.0_linux_amd64.tar.gz
+          echo "9708a99717b5a951453c2ff7c14c25d3418d02ca7fcb96fdb382a8f2083bab5e  $labdir/wstunnel.tar.gz" | sha256sum -c -
+          tar -xzf "$labdir/wstunnel.tar.gz" -C "$labdir" wstunnel
+          chmod 0700 "$labdir/wstunnel"
+          GCVPN_WSTUNNEL="$labdir/wstunnel" python3 tests/lab/check_wss_tls.py
       - name: Key and config hygiene
         shell: bash
         run: |

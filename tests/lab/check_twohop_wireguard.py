@@ -94,7 +94,7 @@ def udp_client(pid, destination, port, payload, *, require_reply=False):
     )
 
 
-def verify_traffic(nodes):
+def verify_traffic(nodes, scenario="transit"):
     target = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     target.bind(("10.88.0.1", 9955))
     target.settimeout(10)
@@ -112,18 +112,26 @@ def verify_traffic(nodes):
               " exit source NAT and reverse UDP response")
         print("Exit NAT source in isolated lab:", addr[0])
 
-        node(nodes["entry"].pid, "ip", "link", "set", "gpt0", "down")
+        failure_interfaces = {
+            "transit": ("entry", "gpt0"),
+            "entry": ("entry", "gpe0"),
+            "exit": ("exit", "gpt0"),
+        }
+        if scenario not in failure_interfaces:
+            raise ValueError(f"Unsupported failure scenario: {scenario}")
+        failing_node, interface = failure_interfaces[scenario]
+        node(nodes[failing_node].pid, "ip", "link", "set", interface, "down")
         paused = udp_client(nodes["client"].pid, "10.88.0.1", 9955,
-                             "transit-down-probe")
+                             f"{scenario}-down-probe")
         stdout, stderr = paused.communicate(timeout=8)
         assert paused.returncode == 0, stderr
         target.settimeout(2)
         try:
             leaked, source = target.recvfrom(1024)
         except socket.timeout:
-            print("PASS transit-down: target received no further client packets")
+            print(f"PASS {scenario}-down: target received no further client packets")
         else:
-            raise AssertionError(f"traffic reached target after transit failure:"
+            raise AssertionError(f"traffic reached target after {scenario} failure:"
                                  f" {leaked!r} from {source}")
     finally:
         target.close()
@@ -201,7 +209,7 @@ def inside(wg):
                  "198.51.100.2/32", "via", "192.0.2.1", "dev", "eth0")
             node(children["client"].pid, "ip", "route", "replace",
                  "default", "dev", "gpv0")
-            verify_traffic(children)
+            verify_traffic(children, os.environ.get("GCVPN_FAILURE", "transit"))
         finally:
             for proc in children.values():
                 proc.terminate()

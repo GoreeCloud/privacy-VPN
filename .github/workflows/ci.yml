@@ -37,6 +37,8 @@ jobs:
             sudo apt-get install -y wireguard-tools
           fi
           sudo python3 tests/lab/check_twohop_wireguard.py
+          sudo env GCVPN_FAILURE=entry python3 tests/lab/check_twohop_wireguard.py
+          sudo env GCVPN_FAILURE=exit python3 tests/lab/check_twohop_wireguard.py
       - name: Key and config hygiene
         shell: bash
         run: |

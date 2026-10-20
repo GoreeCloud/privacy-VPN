@@ -146,6 +146,7 @@ class ValidationTests(unittest.TestCase):
         self.assertIn("127.0.0.1:51820", (out / "gpv0.conf").read_text())
         self.assertIn("tcp dport 443", (out / "client-killswitch.nft").read_text())
         self.assertIn("wss://vpn.example.org:443", (out / "wstunnel-client.sh").read_text())
+        self.assertIn("client --tls-verify-certificate ", (out / "wstunnel-client.sh").read_text())
         self.assertTrue((out / "client-underlay-route.sh").is_file())
 
 

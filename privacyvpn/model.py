@@ -3,7 +3,9 @@ import base64
 import binascii
 import ipaddress
 import json
+import os
 import re
+import stat
 from pathlib import Path
 
 CLIENT = "10.77.1.2"
@@ -67,12 +69,27 @@ def port(value):
 
 
 def load(path):
-    path = Path(path)
-    if path.is_symlink() or not path.is_file() or path.stat().st_size > 32768:
-        raise Invalid("Topology must be a small regular file")
+    # Pin one file descriptor for both file-type/size checks and parsing.
+    # O_NOFOLLOW prevents a symlink-swap between checking and opening.
+    # O_NONBLOCK also prevents blocking on an attacker-supplied FIFO.
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
     try:
-        config = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_unique_fields)
-    except (ValueError, OSError, UnicodeError) as err:
+        fd = os.open(Path(path), flags)
+    except OSError as err:
+        raise Invalid("Topology must be a small regular file") from err
+    try:
+        with os.fdopen(fd, "rb") as handle:
+            metadata = os.fstat(handle.fileno())
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 32768:
+                raise Invalid("Topology must be a small regular file")
+            data = handle.read(32769)
+            if len(data) > 32768:
+                raise Invalid("Topology exceeds 32768 bytes")
+    except OSError as err:
+        raise Invalid("Unable to safely read topology") from err
+    try:
+        config = json.loads(data.decode("utf-8"), object_pairs_hook=_unique_fields)
+    except (ValueError, UnicodeError) as err:
         raise Invalid("Cannot parse topology JSON") from err
     exact(config, ["client", "entry", "exit", "transport"], "topology")
     c = exact(config["client"], ["public_key", "dns"], "client")

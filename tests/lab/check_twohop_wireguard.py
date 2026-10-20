@@ -96,8 +96,11 @@ def udp_client(pid, destination, port, payload, *, require_reply=False):
 
 def verify_traffic(nodes, scenario="transit"):
     target = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    dns_target = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     target.bind(("10.88.0.1", 9955))
+    dns_target.bind(("10.88.0.1", 53))
     target.settimeout(10)
+    dns_target.settimeout(10)
     try:
         client = udp_client(nodes["client"].pid, "10.88.0.1", 9955,
                             "two-hop-probe", require_reply=True)
@@ -111,6 +114,19 @@ def verify_traffic(nodes, scenario="transit"):
         print("PASS three-node WireGuard: encrypted client-entry-exit tunnel,"
               " exit source NAT and reverse UDP response")
         print("Exit NAT source in isolated lab:", addr[0])
+
+        # The topology declares 10.88.0.1 as DNS. Exercise its UDP/53 path
+        # through both relays, without changing a system resolver or host DNS.
+        dns_client = udp_client(nodes["client"].pid, "10.88.0.1", 53,
+                                "synthetic-resolver-query", require_reply=True)
+        dns_data, dns_addr = dns_target.recvfrom(1024)
+        assert dns_data == b"synthetic-resolver-query", dns_data
+        assert dns_addr[0] == "203.0.113.2", f"DNS path bypassed exit NAT: {dns_addr}"
+        dns_target.sendto(b"synthetic-resolver-reply", dns_addr)
+        dns_out, dns_err = dns_client.communicate(timeout=8)
+        assert dns_client.returncode == 0, dns_err
+        assert dns_out.strip() == "synthetic-resolver-reply", dns_out
+        print("PASS isolated resolver UDP/53 path: client-entry-exit NAT and response")
 
         failure_interfaces = {
             "transit": ("entry", "gpt0"),
@@ -133,8 +149,22 @@ def verify_traffic(nodes, scenario="transit"):
         else:
             raise AssertionError(f"traffic reached target after {scenario} failure:"
                                  f" {leaked!r} from {source}")
+
+        dns_paused = udp_client(nodes["client"].pid, "10.88.0.1", 53,
+                                f"resolver-after-{scenario}")
+        dns_out, dns_err = dns_paused.communicate(timeout=8)
+        assert dns_paused.returncode == 0, dns_err
+        dns_target.settimeout(2)
+        try:
+            leaked_dns, dns_source = dns_target.recvfrom(1024)
+        except socket.timeout:
+            print(f"PASS {scenario}-down: no resolver UDP/53 reached simulated DNS")
+        else:
+            raise AssertionError(f"resolver traffic escaped after {scenario} failure:"
+                                 f" {leaked_dns!r} from {dns_source}")
     finally:
         target.close()
+        dns_target.close()
 
 
 def inside(wg):

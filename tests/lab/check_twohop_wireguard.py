@@ -94,7 +94,26 @@ def udp_client(pid, destination, port, payload, *, require_reply=False):
     )
 
 
-def verify_traffic(nodes, scenario="transit"):
+def udp_recovery_client(pid, destination, port, payload):
+    """Retry UDP for an upper-bounded handshake-recovery window."""
+    program = (
+        "import socket,sys\n"
+        "s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)\n"
+        "s.settimeout(0.8)\n"
+        "for attempt in range(30):\n"
+        " s.sendto(sys.argv[1].encode(),(sys.argv[2],int(sys.argv[3])))\n"
+        " try:\n"
+        "  print(s.recvfrom(1024)[0].decode());break\n"
+        " except socket.timeout: pass\n"
+        "else: sys.exit(1)\n"
+    )
+    return subprocess.Popen(
+        ["nsenter", "-t", str(pid), "-n", sys.executable, "-c",
+         program, payload, destination, str(port)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+
+def verify_traffic(nodes, scenario="transit", entry_route_script=None):
     target = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     dns_target = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     target.bind(("10.88.0.1", 9955))
@@ -162,6 +181,51 @@ def verify_traffic(nodes, scenario="transit"):
         else:
             raise AssertionError(f"resolver traffic escaped after {scenario} failure:"
                                  f" {leaked_dns!r} from {dns_source}")
+
+        # Re-enable only the interface disabled in this disposable scenario.
+        # Demand a fresh two-way application exchange and a DNS-port exchange.
+        node(nodes[failing_node].pid, "ip", "link", "set", interface, "up")
+        # Routes bound to an interface may be invalidated by link teardown.
+        # Re-establish the explicit dev routes as an operator recovery action.
+        if scenario == "transit":
+            assert entry_route_script is not None
+            node(nodes["entry"].pid, "sh", entry_route_script)
+        elif scenario == "exit":
+            node(nodes["exit"].pid, "ip", "route", "replace",
+                 "10.77.1.0/24", "dev", "gpt0")
+        for port, service, message in (
+            (9955, target, b"recovered-service"),
+            (53, dns_target, b"recovered-resolver"),
+        ):
+            service.settimeout(1)
+            recovered = udp_recovery_client(nodes["client"].pid, "10.88.0.1",
+                                            port, message.decode())
+            deadline = time.monotonic() + 28
+            received_any = False
+            while time.monotonic() < deadline and recovered.poll() is None:
+                try:
+                    received, observed_source = service.recvfrom(1024)
+                except socket.timeout:
+                    continue
+                assert received == message, received
+                assert observed_source[0] == "203.0.113.2", observed_source
+                received_any = True
+                service.sendto(b"restored-ok", observed_source)
+            recovered_out, recovered_err = recovered.communicate(timeout=3)
+            if not received_any or recovered.returncode != 0:
+                for label, interfaces in (
+                    ("client", ("gpv0",)),
+                    ("entry", ("gpe0", "gpt0")),
+                    ("exit", ("gpt0",)),
+                ):
+                    for device in interfaces:
+                        print("DEBUG recovery", label, device,
+                              node(nodes[label].pid, "wg", "show", device,
+                                   "transfer"), flush=True)
+                raise AssertionError(f"No successful recovery: {scenario}, "
+                                     f"port {port}, {recovered_err}")
+            assert recovered_out.strip() == "restored-ok", recovered_out
+        print(f"PASS {scenario}-restored: application and resolver paths recovered")
     finally:
         target.close()
         dns_target.close()
@@ -239,7 +303,7 @@ def inside(wg):
                  "198.51.100.2/32", "via", "192.0.2.1", "dev", "eth0")
             node(children["client"].pid, "ip", "route", "replace",
                  "default", "dev", "gpv0")
-            verify_traffic(children, os.environ.get("GCVPN_FAILURE", "transit"))
+            verify_traffic(children, os.environ.get("GCVPN_FAILURE", "transit"), routing)
         finally:
             for proc in children.values():
                 proc.terminate()

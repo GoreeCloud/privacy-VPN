@@ -20,7 +20,7 @@ def render_client_underlay(endpoint):
         'GATEWAY="$2"\n'
         'case "$WAN_IFACE" in ""|*[!a-zA-Z0-9_.-]*) echo "Invalid interface" >&2; exit 2;; esac\n'
         '# A VPN tunnel or an invalid Linux interface name cannot be an underlay.\n'
-        'case "$WAN_IFACE" in -*|gpv0|gpe0|gpt0) echo "Invalid interface" >&2; exit 2;; esac\n'
+        'case "$WAN_IFACE" in -*|lo|wg*|tun*|tap*|tailscale*|gpv0|gpe0|gpt0) echo "Invalid interface" >&2; exit 2;; esac\n'
         'if [ "${#WAN_IFACE}" -gt 15 ]; then echo "Invalid interface" >&2; exit 2; fi\n'
         'case "$GATEWAY" in ""|*..*|.*|*.|*[!0-9.]*) echo "Invalid IPv4 gateway" >&2; exit 2;; esac\n'
         'ORIGINAL_IFS="$IFS"; IFS=.; set -- $GATEWAY; IFS="$ORIGINAL_IFS"\n'

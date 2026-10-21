@@ -42,7 +42,8 @@ class UnderlaySafetyTests(unittest.TestCase):
 
 
     def test_tunnel_or_overlong_underlay_interface_rejected(self):
-        for interface in ('-eth0', 'gpv0', 'gpe0', 'gpt0', 'thisinterfaceistoolong'):
+        for interface in ('-eth0', 'lo', 'wg0', 'tun0', 'tap1', 'tailscale0',
+                          'gpv0', 'gpe0', 'gpt0', 'thisinterfaceistoolong'):
             with self.subTest(interface=interface):
                 result = self.run_script(interface, '192.0.2.1')
                 self.assertEqual(result.returncode, 2)

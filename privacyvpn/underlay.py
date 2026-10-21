@@ -5,7 +5,11 @@ WireGuard route. The provisioning CLI never executes this script.
 """
 
 
+from .model import endpoint as validate_endpoint
+
+
 def render_client_underlay(endpoint):
+    endpoint = validate_endpoint(endpoint)
     return (
         "#!/bin/sh\n"
         "# Isolated lab use only. Verify the actual WAN interface/gateway first.\n"

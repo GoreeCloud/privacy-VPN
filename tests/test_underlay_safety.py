@@ -40,6 +40,14 @@ class UnderlaySafetyTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertIn("Invalid interface", result.stderr)
 
+
+    def test_tunnel_or_overlong_underlay_interface_rejected(self):
+        for interface in ('-eth0', 'gpv0', 'gpe0', 'gpt0', 'thisinterfaceistoolong'):
+            with self.subTest(interface=interface):
+                result = self.run_script(interface, '192.0.2.1')
+                self.assertEqual(result.returncode, 2)
+                self.assertIn('Invalid interface', result.stderr)
+
     def test_non_ipv4_gateway_rejected(self):
         result = self.run_script("eth0", "host.example")
         self.assertEqual(result.returncode, 2)

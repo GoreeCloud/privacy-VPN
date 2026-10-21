@@ -74,3 +74,13 @@ class UnderlaySafetyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_gateway_requires_canonical_ipv4_before_running_ip(self):
+        for gateway in ("1.2.3", "1.2.3.4.5", "1..2.3", ".1.2.3",
+                        "1.2.3.", "01.2.3.4", "256.2.3.4",
+                        "224.0.0.1", "0.0.0.0", "999999999999999.2.3.4"):
+            with self.subTest(gateway=gateway):
+                result = self.run_script("eth0", gateway)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn("Invalid IPv4 gateway", result.stderr)
+

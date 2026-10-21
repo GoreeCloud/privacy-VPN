@@ -30,6 +30,7 @@ def render_client_underlay(endpoint):
         '  if [ "$OCTET" -gt 255 ]; then echo "Invalid IPv4 gateway" >&2; exit 2; fi\n'
         'done\n'
         'if [ "$1" -ge 224 ] || [ "$GATEWAY" = "0.0.0.0" ]; then echo "Invalid IPv4 gateway" >&2; exit 2; fi\n'
+        f'if [ "$GATEWAY" = "{endpoint}" ]; then echo "Invalid IPv4 gateway: entry endpoint is not a gateway" >&2; exit 2; fi\n'
         f'ip -4 route add {endpoint}/32 via "$GATEWAY" dev "$WAN_IFACE" proto 188\n'
         f'echo "Inspect the host route: ip -4 route get {endpoint}"\n'
         "# Recovery: inspect route ownership before deleting only this host route.\n"

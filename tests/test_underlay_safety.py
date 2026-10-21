@@ -48,6 +48,19 @@ class UnderlaySafetyTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 2)
                 self.assertIn('Invalid interface', result.stderr)
 
+    def test_endpoint_cannot_be_its_own_gateway(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_ip = Path(tmp, 'ip')
+            marker = Path(tmp, 'route_called')
+            fake_ip.write_text('#!/bin/sh\\ntouch "$UNDERLAY_ROUTE_MARKER"\\n')
+            fake_ip.chmod(0o700)
+            env = dict(os.environ, PATH=tmp + os.pathsep + os.environ.get('PATH', ''),
+                       UNDERLAY_ROUTE_MARKER=str(marker))
+            result = self.run_script('eth0', '203.0.113.10', env=env)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn('entry endpoint is not a gateway', result.stderr)
+            self.assertFalse(marker.exists(), 'Invalid gateway invoked ip route')
+
     def test_non_ipv4_gateway_rejected(self):
         result = self.run_script("eth0", "host.example")
         self.assertEqual(result.returncode, 2)

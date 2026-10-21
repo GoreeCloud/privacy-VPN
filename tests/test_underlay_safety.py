@@ -72,9 +72,6 @@ class UnderlaySafetyTests(unittest.TestCase):
                 self.assertIn(f'oifname "{interface}" meta nfproto ipv6 drop', policy)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
     def test_gateway_requires_canonical_ipv4_before_running_ip(self):
         for gateway in ("1.2.3", "1.2.3.4.5", "1..2.3", ".1.2.3",
                         "1.2.3.", "01.2.3.4", "256.2.3.4",
@@ -84,3 +81,6 @@ if __name__ == "__main__":
                 self.assertEqual(result.returncode, 2, result.stderr)
                 self.assertIn("Invalid IPv4 gateway", result.stderr)
 
+
+if __name__ == "__main__":
+    unittest.main()

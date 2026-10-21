@@ -22,6 +22,18 @@ class UnderlaySafetyTests(unittest.TestCase):
             capture_output=True, check=False, env=env,
         )
 
+    def test_route_renderer_validates_even_direct_library_call(self):
+        # CLI input is validated too, but library callers must not be able
+        # to interpolate arbitrary command text into an operator-run script.
+        for candidate in ('127.0.0.1', '0.0.0.0', '224.0.0.1',
+                          '203.0.113.10; touch /tmp/unwanted',
+                          '203.0.113.10\\nroute delete default', 'host.example', ''):
+            with self.subTest(endpoint=candidate):
+                with self.assertRaises(ValueError):
+                    render_client_underlay(candidate)
+        self.assertIn('ip -4 route add 203.0.113.10/32',
+                      render_client_underlay('203.0.113.10'))
+
     def test_shell_syntax_and_exact_host_route(self):
         parsed = subprocess.run(["sh", "-n"], input=self.script,
                                 text=True, capture_output=True, check=False)

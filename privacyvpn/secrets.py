@@ -6,7 +6,9 @@ from .model import Invalid, key
 
 
 def read_secret(path):
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    # Open nonblocking so a hostile FIFO cannot hang the renderer before fstat.
+    # A regular file is unaffected; symlinks remain refused where supported.
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
     try:
         fd = os.open(Path(path), flags)
         try:
